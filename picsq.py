@@ -264,7 +264,7 @@ class SquareImageTool:
             result.paste(img, offset)
 
         # Save to output folder (do not overwrite original; append _square)
-        folder = self.output_folder if self.output_folder else os.path.dirname(path)
+        folder = self.get_output_folder(path)
         base, ext = os.path.splitext(os.path.basename(path))
         out_name = f"{base}{ext}"
         out_path = os.path.join(folder, out_name)
@@ -321,6 +321,19 @@ class SquareImageTool:
     # utility to ensure canvas geometry tracks resizing
     # (optional: keep main_canvas size constants; for advanced, bind <Configure>)
     # Could be added later.
+
+    def get_output_folder(self, src_path):
+        # ユーザーが出力フォルダを選択していればそれを使う
+        if self.output_folder:
+            os.makedirs(self.output_folder, exist_ok=True)
+            return self.output_folder
+
+        # 未選択なら、元画像フォルダ内に作成
+        base_dir = os.path.dirname(src_path)
+        auto_dir = os.path.join(base_dir, "square_output")
+        os.makedirs(auto_dir, exist_ok=True)
+        return auto_dir
+
 
 if __name__ == "__main__":
     root = tk.Tk()
