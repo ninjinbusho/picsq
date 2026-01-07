@@ -184,37 +184,54 @@ class SquareImageTool:
         self._draw_crop_rect_for_center(cx, cy)
 
     def _draw_crop_rect_for_center(self, cx_orig, cy_orig):
-        # remove old rect
+        # 古い枠を削除
         if self.crop_rect_id:
-            try:
-                self.main_canvas.delete(self.crop_rect_id)
-            except:
-                pass
+            self.main_canvas.delete(self.crop_rect_id)
             self.crop_rect_id = None
 
         orig_w, orig_h = self.original_img.size
-        side = min(orig_w, orig_h)
+        side = min(orig_w, orig_h)  # 正方形の一辺
 
-        # map original center to display coords
         x0, y0, dw, dh = self.display_geom
+
         scale_x = dw / orig_w
         scale_y = dh / orig_h
-        disp_cx = x0 + int(cx_orig * scale_x)
-        disp_cy = y0 + int(cy_orig * scale_y)
-        disp_half = int((side * scale_x) // 2)  # use scale_x (scale_x==scale_y ideally)
+        scale = min(scale_x, scale_y)
 
-        x1 = disp_cx - disp_half
-        y1 = disp_cy - disp_half
-        x2 = disp_cx + disp_half
-        y2 = disp_cy + disp_half
+        half_disp = int((side * scale) / 2)
 
-        # clamp inside display image area for visual
-        x1 = max(x1, x0)
-        y1 = max(y1, y0)
-        x2 = min(x2, x0 + dw)
-        y2 = min(y2, y0 + dh)
+        # 元画像中心 → 表示座標
+        disp_cx = x0 + int(cx_orig * scale)
+        disp_cy = y0 + int(cy_orig * scale)
 
-        self.crop_rect_id = self.main_canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=2, tags=("crop",))
+        # --- 中心点の制限（はみ出し防止） ---
+        min_cx = x0 + half_disp
+        max_cx = x0 + dw - half_disp
+        min_cy = y0 + half_disp
+        max_cy = y0 + dh - half_disp
+
+        disp_cx = max(min_cx, min(disp_cx, max_cx))
+        disp_cy = max(min_cy, min(disp_cy, max_cy))
+
+        # 枠の座標
+        x1 = disp_cx - half_disp
+        y1 = disp_cy - half_disp
+        x2 = disp_cx + half_disp
+        y2 = disp_cy + half_disp
+
+        self.crop_rect_id = self.main_canvas.create_rectangle(
+            x1, y1, x2, y2,
+            outline="red",
+            width=2,
+            tags=("crop",)
+        )
+
+        # --- 修正後の中心点を元画像座標に戻して保存 ---
+        new_cx = int((disp_cx - x0) / scale)
+        new_cy = int((disp_cy - y0) / scale)
+        path = self.image_paths[self.index]
+        self.crop_centers[path] = (new_cx, new_cy)
+
 
     # --- mouse handlers for selecting crop center ---
     def on_click(self, event):
@@ -225,20 +242,20 @@ class SquareImageTool:
         self._update_center_from_event(event)
 
     def _update_center_from_event(self, event):
-        # map canvas event to original image coords, but only if event inside displayed image
         x0, y0, dw, dh = self.display_geom
-        if event.x < x0 or event.x > x0 + dw or event.y < y0 or event.y > y0 + dh:
+
+        if not (x0 <= event.x <= x0 + dw and y0 <= event.y <= y0 + dh):
             return
+
+        orig_w, orig_h = self.original_img.size
         rel_x = event.x - x0
         rel_y = event.y - y0
-        orig_w, orig_h = self.original_img.size
+
         cx = int(rel_x * orig_w / dw)
         cy = int(rel_y * orig_h / dh)
-        # store per image
-        path = self.image_paths[self.index]
-        self.crop_centers[path] = (cx, cy)
-        # redraw crop rect
+
         self._draw_crop_rect_for_center(cx, cy)
+
 
     # --- processing ---
     def process_image(self, path):
